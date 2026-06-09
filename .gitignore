@@ -4,3 +4,4 @@ docker/build-context/assets/*.tgz
 docker/build-context/assets/*.zip
 docker/build-context/assets/*.jar
 docker/build-context/assets/*.tmp
+scripts/
