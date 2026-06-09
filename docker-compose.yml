@@ -1,0 +1,231 @@
+name: zhitu-bigdata
+
+x-hadoop-image: &hadoop-image
+  image: zhitu/hadoop:3.3.6-java8
+  build:
+    context: ./docker/build-context
+    dockerfile: dockerfiles/hadoop.Dockerfile
+    args:
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+
+x-hive-image: &hive-image
+  image: zhitu/hive:4.0.1-java8
+  build:
+    context: ./docker/build-context
+    dockerfile: dockerfiles/hive.Dockerfile
+    args:
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+
+x-spark-image: &spark-image
+  image: zhitu/spark:3.5.1-java8-python3
+  build:
+    context: ./docker/build-context
+    dockerfile: dockerfiles/spark.Dockerfile
+    args:
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+
+services:
+  mysql:
+    image: mysql:8.0.39
+    container_name: zhitu-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MYSQL_PORT:-13306}:3306"
+    volumes:
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/mysql:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:5.0.14
+    container_name: zhitu-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    volumes:
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  namenode:
+    <<: *hadoop-image
+    container_name: zhitu-hadoop-namenode
+    hostname: namenode
+    command: ["namenode"]
+    profiles: ["hadoop"]
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "9000:9000"
+      - "9870:9870"
+    volumes:
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/hdfs/namenode:/hadoop/dfs/name
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/hadoop-tmp:/hadoop/tmp
+    restart: unless-stopped
+
+  datanode:
+    <<: *hadoop-image
+    container_name: zhitu-hadoop-datanode
+    hostname: datanode
+    command: ["datanode"]
+    profiles: ["hadoop"]
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "9864:9864"
+    volumes:
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/hdfs/datanode:/hadoop/dfs/data
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/hadoop-tmp:/hadoop/tmp
+    depends_on:
+      - namenode
+    restart: unless-stopped
+
+  resourcemanager:
+    <<: *hadoop-image
+    container_name: zhitu-yarn-resourcemanager
+    hostname: resourcemanager
+    command: ["resourcemanager"]
+    profiles: ["hadoop"]
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "8088:8088"
+    depends_on:
+      - namenode
+    restart: unless-stopped
+
+  nodemanager:
+    <<: *hadoop-image
+    container_name: zhitu-yarn-nodemanager
+    hostname: nodemanager
+    command: ["nodemanager"]
+    profiles: ["hadoop"]
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "8042:8042"
+    depends_on:
+      - resourcemanager
+    restart: unless-stopped
+
+  hive-metastore:
+    <<: *hive-image
+    container_name: zhitu-hive-metastore
+    hostname: hive-metastore
+    command: ["metastore"]
+    profiles: ["hive"]
+    environment:
+      TZ: Asia/Shanghai
+      HIVE_DB_USER: ${HIVE_DB_USER:-hive}
+      HIVE_DB_PASSWORD: ${HIVE_DB_PASSWORD:-hive123456}
+    ports:
+      - "9083:9083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      namenode:
+        condition: service_started
+    restart: unless-stopped
+
+  hiveserver2:
+    <<: *hive-image
+    container_name: zhitu-hiveserver2
+    hostname: hiveserver2
+    command: ["hiveserver2"]
+    profiles: ["hive"]
+    environment:
+      TZ: Asia/Shanghai
+      HIVE_DB_USER: ${HIVE_DB_USER:-hive}
+      HIVE_DB_PASSWORD: ${HIVE_DB_PASSWORD:-hive123456}
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    depends_on:
+      - hive-metastore
+    restart: unless-stopped
+
+  spark-master:
+    <<: *spark-image
+    container_name: zhitu-spark-master
+    hostname: spark-master
+    command: ["master"]
+    profiles: ["spark"]
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "7077:7077"
+      - "18080:8080"
+    volumes:
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/spark-events:/spark-events
+    restart: unless-stopped
+
+  spark-worker:
+    <<: *spark-image
+    container_name: zhitu-spark-worker
+    hostname: spark-worker
+    command: ["worker"]
+    profiles: ["spark"]
+    environment:
+      TZ: Asia/Shanghai
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
+    ports:
+      - "18081:8081"
+    volumes:
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}/spark-events:/spark-events
+    depends_on:
+      - spark-master
+    restart: unless-stopped
+
+  python:
+    image: zhitu/python-bigdata:3.12
+    build:
+      context: ./docker/build-context
+      dockerfile: dockerfiles/python.Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    container_name: zhitu-python
+    hostname: python
+    command: ["sleep", "infinity"]
+    profiles: ["tools"]
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      HADOOP_FS: hdfs://namenode:9000
+      SPARK_MASTER: spark://spark-master:7077
+    volumes:
+      - ./:/workspace
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}:/data
+    working_dir: /workspace
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
