@@ -34,6 +34,7 @@ city_salary = df.groupBy("city").agg(
 ).orderBy("avg_salary", ascending=False)
 
 print("Spark 城市平均薪资分析：")
+
 city_salary.show(truncate=False)
 
 spark.stop()
