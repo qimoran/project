@@ -69,9 +69,11 @@ http://localhost:5000
 
 ```env
 LLM_API_KEY=
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=https://www.aidawan.fun/v1
+LLM_MODEL=glm-5
 ```
+
+项目会调用 OpenAI 风格的 `/v1/chat/completions`，当前已验证 `glm-5` 可以稳定生成报告。
 
 `LLM_API_KEY` 留空时，系统不会报错，会使用本地规则生成一份兜底报告。要采集真实公开页面，把页面 URL 填到：
 
