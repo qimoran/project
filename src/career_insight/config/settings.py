@@ -54,8 +54,8 @@ class Settings:
 
     llm_api_key: str = os.getenv("LLM_API_KEY", "")
     llm_base_url: str = os.getenv("LLM_BASE_URL", "https://www.aidawan.fun/v1")
-    llm_model: str = os.getenv("LLM_MODEL", "glm-5")
-    llm_timeout_seconds: int = _get_int("LLM_TIMEOUT_SECONDS", 60)
+    llm_model: str = os.getenv("LLM_MODEL", "glm-5.1")
+    llm_timeout_seconds: int = _get_int("LLM_TIMEOUT_SECONDS", 600)
 
     crawl_target_urls: tuple[str, ...] = tuple(_split_csv(os.getenv("CRAWL_TARGET_URLS")))
     crawl_keywords: tuple[str, ...] = tuple(

@@ -226,8 +226,8 @@ services:
       SPARK_MASTER: spark://spark-master:7077
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://www.aidawan.fun/v1}
-      LLM_MODEL: ${LLM_MODEL:-glm-5}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
+      LLM_MODEL: ${LLM_MODEL:-glm-5.1}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-600}
       CRAWL_TARGET_URLS: ${CRAWL_TARGET_URLS:-}
       CRAWL_KEYWORDS: ${CRAWL_KEYWORDS:-大数据,数据分析,Spark,Hive}
       CRAWL_MAX_PAGES: ${CRAWL_MAX_PAGES:-2}
@@ -273,8 +273,8 @@ services:
       SPARK_MASTER: spark://spark-master:7077
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://www.aidawan.fun/v1}
-      LLM_MODEL: ${LLM_MODEL:-glm-5}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
+      LLM_MODEL: ${LLM_MODEL:-glm-5.1}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-600}
       CRAWL_TARGET_URLS: ${CRAWL_TARGET_URLS:-}
       CRAWL_KEYWORDS: ${CRAWL_KEYWORDS:-大数据,数据分析,Spark,Hive}
       CRAWL_MAX_PAGES: ${CRAWL_MAX_PAGES:-2}
