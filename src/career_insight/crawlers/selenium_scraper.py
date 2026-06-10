@@ -71,7 +71,74 @@ class SlowJobScraper:
         jobs = self._parse_json_ld(soup, source_url)
         if jobs:
             return jobs
+        jobs = self._parse_zhaopin_initial_state(soup, source_url)
+        if jobs:
+            return jobs
         return self._parse_visible_cards(soup, source_url)
+
+    def _parse_zhaopin_initial_state(self, soup: BeautifulSoup, source_url: str) -> list[dict[str, Any]]:
+        for script in soup.find_all("script"):
+            text = script.string or script.get_text(strip=True)
+            if "__INITIAL_STATE__=" not in text or "positionList" not in text:
+                continue
+            raw = text.split("__INITIAL_STATE__=", 1)[1].strip()
+            try:
+                payload, _ = json.JSONDecoder().raw_decode(raw)
+            except json.JSONDecodeError:
+                continue
+
+            jobs: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for item in payload.get("positionList", []) if isinstance(payload, dict) else []:
+                job = self._job_from_zhaopin_position(item, source_url)
+                if not job:
+                    continue
+                source = job["source_url"]
+                if source in seen:
+                    continue
+                seen.add(source)
+                jobs.append(job)
+            return jobs
+        return []
+
+    def _job_from_zhaopin_position(self, item: Any, source_url: str) -> dict[str, Any] | None:
+        if not isinstance(item, dict):
+            return None
+
+        detail = item.get("jobDetailData") if isinstance(item.get("jobDetailData"), dict) else {}
+        position = detail.get("position") if isinstance(detail.get("position"), dict) else {}
+        base = position.get("base") if isinstance(position.get("base"), dict) else {}
+        work_location = (
+            position.get("workLocation") if isinstance(position.get("workLocation"), dict) else {}
+        )
+
+        salary_text = clean_text(item.get("salary60") or base.get("salary"), "面议")
+        salary_min, salary_max = parse_salary_text(salary_text)
+        skills = ",".join(
+            clean_text(tag.get("name"))
+            for tag in item.get("jobSkillTags", [])
+            if isinstance(tag, dict) and clean_text(tag.get("name"))
+        )
+        source = clean_text(
+            item.get("positionURL") or base.get("positionUrl"),
+            f"{source_url}#zhaopin-{clean_text(base.get('positionId'), 'unknown')}",
+        )
+
+        return {
+            "job_title": clean_text(item.get("name") or base.get("positionName"), "未知岗位"),
+            "company_name": clean_text(item.get("companyName"), "未知公司"),
+            "city": clean_text(item.get("workCity") or work_location.get("positionWorkCity"), "未知"),
+            "district": clean_text(item.get("cityDistrict") or work_location.get("positionCityDistrict")),
+            "salary_text": salary_text,
+            "salary_min": salary_min,
+            "salary_max": salary_max,
+            "education": clean_text(item.get("education") or base.get("education"), "不限"),
+            "experience": clean_text(item.get("workingExp") or base.get("positionWorkingExp"), "不限"),
+            "skills": skills,
+            "industry": clean_text(item.get("industryName"), "未知"),
+            "source": "zhaopin",
+            "source_url": source,
+        }
 
     def _parse_json_ld(self, soup: BeautifulSoup, source_url: str) -> list[dict[str, Any]]:
         jobs: list[dict[str, Any]] = []

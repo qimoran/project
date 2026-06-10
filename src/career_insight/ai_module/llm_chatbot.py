@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,12 +42,28 @@ class CompatibleLLMClient:
             "temperature": temperature,
         }
 
-        response = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=self.settings.llm_timeout_seconds,
-        )
+        response: requests.Response | None = None
+        last_error: requests.RequestException | None = None
+        for attempt in range(3):
+            try:
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    json=payload,
+                    timeout=self.settings.llm_timeout_seconds,
+                )
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt == 2:
+                    raise
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            if response.status_code < 500 or attempt == 2:
+                break
+            time.sleep(1.5 * (attempt + 1))
+
+        if response is None:
+            raise RuntimeError("LLM API request was not sent") from last_error
         self._raise_for_error_response(response)
         data = self._json_response(response)
         content = data["choices"][0]["message"]["content"]

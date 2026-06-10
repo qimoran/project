@@ -236,7 +236,7 @@ docker compose exec -T -e PYTHONPATH=/workspace/src python python -m career_insi
 在 `.env` 里配置公开岗位页面：
 
 ```env
-CRAWL_TARGET_URLS=https://www.zhaopin.com/
+CRAWL_TARGET_URLS=https://sou.zhaopin.com/?kw=%E5%A4%A7%E6%95%B0%E6%8D%AE&kt=3
 CRAWL_KEYWORDS=大数据,数据分析,Spark,Hive
 CRAWL_MAX_PAGES=2
 CRAWL_DELAY_SECONDS=3
@@ -245,9 +245,10 @@ CRAWL_DELAY_SECONDS=3
 说明：
 
 1. `CRAWL_TARGET_URLS` 多个 URL 用英文逗号分隔。
-2. 采集器只处理公开页面，不处理登录、验证码、付费内容或绕过反爬。
-3. 如果 `CRAWL_TARGET_URLS` 留空，流程会直接分析 MySQL 中已有的 `raw_jobs` 数据。
-4. 如果采集失败但数据库里已有数据，后续清洗和分析仍可继续。
+2. 建议填写搜索结果页或具体岗位列表页，不要填写 `https://www.zhaopin.com/` 这类首页；首页能访问成功，但通常没有可解析的岗位列表。
+3. 采集器只处理公开页面，不处理登录、验证码、付费内容或绕过反爬。
+4. 如果 `CRAWL_TARGET_URLS` 留空，流程会直接分析 MySQL 中已有的 `raw_jobs` 数据。
+5. 如果采集失败但数据库里已有数据，后续清洗和分析仍可继续。
 
 ## 11. MySQL 数据表说明
 
@@ -448,4 +449,3 @@ http://localhost:5000
 ```text
 agent 分支是在大数据就业分析项目上增加的自动化流程智能体，它把数据采集、清洗、分析、HDFS 同步和 AI 报告生成串成了一个可复现的闭环。
 ```
-

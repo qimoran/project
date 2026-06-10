@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from career_insight.data_processing.standardizer import split_skills
+from career_insight.storage.mysql_handler import MySQLStore
 
 
 def _decimal_to_float(value: Any) -> float | None:
@@ -77,4 +78,14 @@ def analyze_jobs(jobs: list[dict[str, Any]]) -> dict[str, Any]:
             for name, count in industry_counter.most_common(10)
         ],
     }
+    return metrics
+
+
+def run_salary_and_trend_analysis(
+    run_id: int,
+    jobs: list[dict[str, Any]],
+    store: MySQLStore,
+) -> dict[str, Any]:
+    metrics = analyze_jobs(jobs)
+    store.replace_analysis(run_id, metrics)
     return metrics

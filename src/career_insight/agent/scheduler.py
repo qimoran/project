@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import threading
-import time
 from datetime import datetime
 
 from career_insight.agent.orchestrator import AgentRunner
 from career_insight.storage.mysql_handler import MySQLStore
+
+logger = logging.getLogger(__name__)
 
 
 class DailyAgentScheduler:
@@ -34,7 +36,7 @@ class DailyAgentScheduler:
             try:
                 self._tick()
             except Exception:
-                pass
+                logger.exception("定时调度检查失败，将在下个周期重试")
             self._stop.wait(30)
 
     def _tick(self) -> None:

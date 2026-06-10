@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import threading
+from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Iterator
 
 from career_insight.config.database import get_mysql_connection
 from career_insight.config.settings import Settings, get_settings
@@ -24,9 +26,31 @@ def dumps_json(value: Any) -> str:
 class MySQLStore:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
+        self._local = threading.local()
 
-    def _connect(self, *, autocommit: bool = True):
-        return get_mysql_connection(self.settings, autocommit=autocommit)
+    def _connection(self):
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = get_mysql_connection(self.settings, autocommit=True)
+            self._local.conn = conn
+        else:
+            conn.ping(reconnect=True)
+        return conn
+
+    @contextmanager
+    def _cursor(self, *, transaction: bool = False) -> Iterator[Any]:
+        conn = self._connection()
+        if transaction:
+            conn.begin()
+        try:
+            with conn.cursor() as cursor:
+                yield cursor
+            if transaction:
+                conn.commit()
+        except Exception:
+            if transaction:
+                conn.rollback()
+            raise
 
     def ensure_schema(self) -> None:
         statements = [
@@ -45,7 +69,7 @@ class MySQLStore:
                 skills VARCHAR(255) NULL COMMENT '技能关键词',
                 industry VARCHAR(100) NULL COMMENT '公司行业',
                 source VARCHAR(50) NOT NULL DEFAULT 'agent' COMMENT '数据来源',
-                source_url VARCHAR(255) NOT NULL COMMENT '来源链接或模拟编号',
+                source_url VARCHAR(255) NOT NULL COMMENT '来源链接',
                 crawled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '采集时间',
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -169,28 +193,26 @@ class MySQLStore:
             """,
         ]
 
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                for statement in statements:
-                    cursor.execute(statement)
-                cursor.execute(
-                    """
-                    INSERT IGNORE INTO agent_schedule (id, enabled, daily_time)
-                    VALUES (1, 0, '09:00')
-                    """
-                )
+        with self._cursor() as cursor:
+            for statement in statements:
+                cursor.execute(statement)
+            cursor.execute(
+                """
+                INSERT IGNORE INTO agent_schedule (id, enabled, daily_time)
+                VALUES (1, 0, '09:00')
+                """
+            )
 
     def create_run(self, trigger_type: str) -> int:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO agent_runs (trigger_type, status, message)
-                    VALUES (%s, 'running', %s)
-                    """,
-                    (trigger_type, "流程智能体开始运行"),
-                )
-                return int(cursor.lastrowid)
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO agent_runs (trigger_type, status, message)
+                VALUES (%s, 'running', %s)
+                """,
+                (trigger_type, "流程智能体开始运行"),
+            )
+            return int(cursor.lastrowid)
 
     def finish_run(
         self,
@@ -201,40 +223,37 @@ class MySQLStore:
         raw_count: int = 0,
         clean_count: int = 0,
     ) -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE agent_runs
-                    SET status=%s, message=%s, raw_count=%s, clean_count=%s, finished_at=NOW()
-                    WHERE id=%s
-                    """,
-                    (status, message, raw_count, clean_count, run_id),
-                )
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE agent_runs
+                SET status=%s, message=%s, raw_count=%s, clean_count=%s, finished_at=NOW()
+                WHERE id=%s
+                """,
+                (status, message, raw_count, clean_count, run_id),
+            )
 
     def start_step(self, run_id: int, step_name: str, detail: str = "") -> int:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO agent_run_steps (run_id, step_name, status, detail)
-                    VALUES (%s, %s, 'running', %s)
-                    """,
-                    (run_id, step_name, detail),
-                )
-                return int(cursor.lastrowid)
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO agent_run_steps (run_id, step_name, status, detail)
+                VALUES (%s, %s, 'running', %s)
+                """,
+                (run_id, step_name, detail),
+            )
+            return int(cursor.lastrowid)
 
     def finish_step(self, step_id: int, status: str, detail: str = "") -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE agent_run_steps
-                    SET status=%s, detail=%s, finished_at=NOW()
-                    WHERE id=%s
-                    """,
-                    (status, detail, step_id),
-                )
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE agent_run_steps
+                SET status=%s, detail=%s, finished_at=NOW()
+                WHERE id=%s
+                """,
+                (status, detail, step_id),
+            )
 
     def insert_raw_jobs(self, jobs: list[dict[str, Any]]) -> int:
         if not jobs:
@@ -265,142 +284,137 @@ class MySQLStore:
             ON DUPLICATE KEY UPDATE {update_clause}, updated_at=CURRENT_TIMESTAMP
         """
 
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                affected = cursor.executemany(
-                    sql,
-                    [[job.get(column) for column in columns] for job in jobs],
-                )
-                return int(affected)
+        with self._cursor() as cursor:
+            affected = cursor.executemany(
+                sql,
+                [[job.get(column) for column in columns] for job in jobs],
+            )
+            return int(affected)
 
     def fetch_raw_jobs(self, limit: int = 1000) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT
-                        id,
-                        job_title,
-                        company_name,
-                        city,
-                        district,
-                        salary_text,
-                        salary_min,
-                        salary_max,
-                        education,
-                        experience,
-                        skills,
-                        industry,
-                        source,
-                        source_url,
-                        crawled_at
-                    FROM raw_jobs
-                    ORDER BY crawled_at DESC, id DESC
-                    LIMIT %s
-                    """,
-                    (limit,),
-                )
-                return list(cursor.fetchall())
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    job_title,
+                    company_name,
+                    city,
+                    district,
+                    salary_text,
+                    salary_min,
+                    salary_max,
+                    education,
+                    experience,
+                    skills,
+                    industry,
+                    source,
+                    source_url,
+                    crawled_at
+                FROM raw_jobs
+                ORDER BY crawled_at DESC, id DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return list(cursor.fetchall())
 
     def replace_clean_jobs(self, jobs: list[dict[str, Any]]) -> int:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("DELETE FROM agent_clean_jobs")
-                if not jobs:
-                    return 0
+        with self._cursor(transaction=True) as cursor:
+            cursor.execute("DELETE FROM agent_clean_jobs")
+            if not jobs:
+                return 0
 
-                columns = [
-                    "raw_id",
-                    "job_title",
-                    "company_name",
-                    "city",
-                    "district",
-                    "salary_text",
-                    "salary_min",
-                    "salary_max",
-                    "salary_avg",
-                    "education",
-                    "experience",
-                    "skills",
-                    "industry",
-                    "source",
-                    "source_url",
-                ]
-                placeholders = ", ".join(["%s"] * len(columns))
-                cursor.executemany(
-                    f"""
-                    INSERT INTO agent_clean_jobs ({", ".join(columns)})
-                    VALUES ({placeholders})
-                    """,
-                    [[job.get(column) for column in columns] for job in jobs],
-                )
-                return int(cursor.rowcount)
+            columns = [
+                "raw_id",
+                "job_title",
+                "company_name",
+                "city",
+                "district",
+                "salary_text",
+                "salary_min",
+                "salary_max",
+                "salary_avg",
+                "education",
+                "experience",
+                "skills",
+                "industry",
+                "source",
+                "source_url",
+            ]
+            placeholders = ", ".join(["%s"] * len(columns))
+            cursor.executemany(
+                f"""
+                INSERT INTO agent_clean_jobs ({", ".join(columns)})
+                VALUES ({placeholders})
+                """,
+                [[job.get(column) for column in columns] for job in jobs],
+            )
+            return int(cursor.rowcount)
 
     def fetch_clean_jobs(self, limit: int = 2000) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT *
-                    FROM agent_clean_jobs
-                    ORDER BY cleaned_at DESC, id DESC
-                    LIMIT %s
-                    """,
-                    (limit,),
-                )
-                return list(cursor.fetchall())
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM agent_clean_jobs
+                ORDER BY cleaned_at DESC, id DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return list(cursor.fetchall())
 
     def replace_analysis(self, run_id: int, metrics: dict[str, Any]) -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                for table in [
-                    "agent_analysis_city_salary",
-                    "agent_analysis_skill_hotness",
-                    "agent_analysis_education_distribution",
-                    "agent_analysis_experience_distribution",
-                ]:
-                    cursor.execute(f"DELETE FROM {table} WHERE run_id=%s", (run_id,))
+        with self._cursor(transaction=True) as cursor:
+            for table in [
+                "agent_analysis_city_salary",
+                "agent_analysis_skill_hotness",
+                "agent_analysis_education_distribution",
+                "agent_analysis_experience_distribution",
+            ]:
+                cursor.execute(f"DELETE FROM {table} WHERE run_id=%s", (run_id,))
 
-                cursor.executemany(
-                    """
-                    INSERT INTO agent_analysis_city_salary (run_id, city, job_count, avg_salary)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    [
-                        (run_id, row["city"], row["job_count"], row["avg_salary"])
-                        for row in metrics.get("city_salary", [])
-                    ],
-                )
-                cursor.executemany(
-                    """
-                    INSERT INTO agent_analysis_skill_hotness (run_id, skill, job_count)
-                    VALUES (%s, %s, %s)
-                    """,
-                    [
-                        (run_id, row["skill"], row["job_count"])
-                        for row in metrics.get("skill_hotness", [])
-                    ],
-                )
-                cursor.executemany(
-                    """
-                    INSERT INTO agent_analysis_education_distribution (run_id, education, job_count)
-                    VALUES (%s, %s, %s)
-                    """,
-                    [
-                        (run_id, row["education"], row["job_count"])
-                        for row in metrics.get("education_distribution", [])
-                    ],
-                )
-                cursor.executemany(
-                    """
-                    INSERT INTO agent_analysis_experience_distribution (run_id, experience, job_count)
-                    VALUES (%s, %s, %s)
-                    """,
-                    [
-                        (run_id, row["experience"], row["job_count"])
-                        for row in metrics.get("experience_distribution", [])
-                    ],
-                )
+            cursor.executemany(
+                """
+                INSERT INTO agent_analysis_city_salary (run_id, city, job_count, avg_salary)
+                VALUES (%s, %s, %s, %s)
+                """,
+                [
+                    (run_id, row["city"], row["job_count"], row["avg_salary"])
+                    for row in metrics.get("city_salary", [])
+                ],
+            )
+            cursor.executemany(
+                """
+                INSERT INTO agent_analysis_skill_hotness (run_id, skill, job_count)
+                VALUES (%s, %s, %s)
+                """,
+                [
+                    (run_id, row["skill"], row["job_count"])
+                    for row in metrics.get("skill_hotness", [])
+                ],
+            )
+            cursor.executemany(
+                """
+                INSERT INTO agent_analysis_education_distribution (run_id, education, job_count)
+                VALUES (%s, %s, %s)
+                """,
+                [
+                    (run_id, row["education"], row["job_count"])
+                    for row in metrics.get("education_distribution", [])
+                ],
+            )
+            cursor.executemany(
+                """
+                INSERT INTO agent_analysis_experience_distribution (run_id, experience, job_count)
+                VALUES (%s, %s, %s)
+                """,
+                [
+                    (run_id, row["experience"], row["job_count"])
+                    for row in metrics.get("experience_distribution", [])
+                ],
+            )
 
     def save_report(
         self,
@@ -411,42 +425,38 @@ class MySQLStore:
         metrics: dict[str, Any],
         llm_model: str,
     ) -> int:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO agent_reports (run_id, title, report_markdown, metrics_json, llm_model)
-                    VALUES (%s, %s, %s, CAST(%s AS JSON), %s)
-                    """,
-                    (run_id, title, report_markdown, dumps_json(metrics), llm_model),
-                )
-                return int(cursor.lastrowid)
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO agent_reports (run_id, title, report_markdown, metrics_json, llm_model)
+                VALUES (%s, %s, %s, CAST(%s AS JSON), %s)
+                """,
+                (run_id, title, report_markdown, dumps_json(metrics), llm_model),
+            )
+            return int(cursor.lastrowid)
 
     def latest_run(self) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM agent_runs ORDER BY id DESC LIMIT 1")
-                return cursor.fetchone()
+        with self._cursor() as cursor:
+            cursor.execute("SELECT * FROM agent_runs ORDER BY id DESC LIMIT 1")
+            return cursor.fetchone()
 
     def latest_report(self) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM agent_reports ORDER BY id DESC LIMIT 1")
-                return cursor.fetchone()
+        with self._cursor() as cursor:
+            cursor.execute("SELECT * FROM agent_reports ORDER BY id DESC LIMIT 1")
+            return cursor.fetchone()
 
     def run_steps(self, run_id: int) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT *
-                    FROM agent_run_steps
-                    WHERE run_id=%s
-                    ORDER BY id
-                    """,
-                    (run_id,),
-                )
-                return list(cursor.fetchall())
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM agent_run_steps
+                WHERE run_id=%s
+                ORDER BY id
+                """,
+                (run_id,),
+            )
+            return list(cursor.fetchall())
 
     def latest_analysis(self) -> dict[str, list[dict[str, Any]]]:
         latest = self.latest_report()
@@ -488,30 +498,27 @@ class MySQLStore:
         }
 
         result: dict[str, list[dict[str, Any]]] = {}
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                for key, sql in queries.items():
-                    cursor.execute(sql, (run_id,))
-                    result[key] = list(cursor.fetchall())
+        with self._cursor() as cursor:
+            for key, sql in queries.items():
+                cursor.execute(sql, (run_id,))
+                result[key] = list(cursor.fetchall())
         return result
 
     def get_schedule(self) -> dict[str, Any]:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT enabled, daily_time FROM agent_schedule WHERE id=1")
-                row = cursor.fetchone()
-                if not row:
-                    return {"enabled": False, "daily_time": "09:00"}
-                return {"enabled": bool(row["enabled"]), "daily_time": row["daily_time"]}
+        with self._cursor() as cursor:
+            cursor.execute("SELECT enabled, daily_time FROM agent_schedule WHERE id=1")
+            row = cursor.fetchone()
+            if not row:
+                return {"enabled": False, "daily_time": "09:00"}
+            return {"enabled": bool(row["enabled"]), "daily_time": row["daily_time"]}
 
     def set_schedule(self, enabled: bool, daily_time: str) -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO agent_schedule (id, enabled, daily_time)
-                    VALUES (1, %s, %s)
-                    ON DUPLICATE KEY UPDATE enabled=VALUES(enabled), daily_time=VALUES(daily_time)
-                    """,
-                    (1 if enabled else 0, daily_time),
-                )
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO agent_schedule (id, enabled, daily_time)
+                VALUES (1, %s, %s)
+                ON DUPLICATE KEY UPDATE enabled=VALUES(enabled), daily_time=VALUES(daily_time)
+                """,
+                (1 if enabled else 0, daily_time),
+            )

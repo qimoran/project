@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS demo_raw_jobs (
 """
 
 
-MOCK_JOBS = [
+DEMO_JOBS = [
     (
         "大数据开发实习生",
         "上海云舟科技有限公司",
@@ -41,7 +41,7 @@ MOCK_JOBS = [
         "本科",
         "在校/应届",
         "Python,Spark,Hive,SQL",
-        "mock://demo/001",
+        "demo://job/001",
     ),
     (
         "数据分析师",
@@ -53,7 +53,7 @@ MOCK_JOBS = [
         "本科",
         "1-3年",
         "Python,Pandas,MySQL,ECharts",
-        "mock://demo/002",
+        "demo://job/002",
     ),
     (
         "数据仓库工程师",
@@ -65,7 +65,7 @@ MOCK_JOBS = [
         "本科",
         "3-5年",
         "Hive,Spark,ETL,Hadoop",
-        "mock://demo/003",
+        "demo://job/003",
     ),
 ]
 
@@ -102,7 +102,7 @@ def prepare_mysql_data() -> None:
                     experience = VALUES(experience),
                     skills = VALUES(skills);
                 """,
-                MOCK_JOBS,
+                DEMO_JOBS,
             )
             cursor.execute("DROP TABLE IF EXISTS demo_clean_jobs;")
             cursor.execute(

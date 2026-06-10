@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from career_insight.ai_module.recommendation import generate_ai_report
-from career_insight.analysis.salary_analysis import run_salary_and_trend_analysis
+from career_insight.analysis.trend_analysis import run_salary_and_trend_analysis
 from career_insight.config.settings import Settings, get_settings
 from career_insight.crawlers.selenium_scraper import SlowJobScraper
 from career_insight.data_processing.cleaner import clean_jobs
@@ -35,7 +35,6 @@ class WorkflowAgent:
         self.scraper_factory = scraper_factory or (lambda: SlowJobScraper(self.settings))
 
     def run(self, trigger_type: str = "manual") -> AgentRunResult:
-        self.store.ensure_schema()
         run_id = self.store.create_run(trigger_type)
         raw_count = 0
         clean_count = 0

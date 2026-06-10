@@ -1,16 +1,9 @@
-scrapy>=2.11
+# career_insight 核心包依赖
 beautifulsoup4
-lxml
-requests
-scrapy-redis
-fake-useragent
-pandas
-numpy
+flask
 pymysql
-sqlalchemy
+requests
+
+# src/python 演示/诊断脚本依赖
 redis
 pyspark==3.5.1
-findspark
-pyecharts
-flask
-setuptools
