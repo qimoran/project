@@ -1,0 +1,8 @@
+beautifulsoup4
+flask
+pandas
+pymysql
+pyecharts
+redis
+requests
+pyspark==3.5.1

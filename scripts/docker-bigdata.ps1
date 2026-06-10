@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("up-all", "down", "restart", "status", "logs", "build", "python", "beeline")]
+    [ValidateSet("up-all", "down", "restart", "status", "logs", "build", "python", "beeline", "web", "agent")]
     [string]$Action = "status"
 )
 
@@ -43,5 +43,12 @@ switch ($Action) {
     }
     "beeline" {
         Invoke-Compose @("exec", "hiveserver2", "beeline", "-u", "jdbc:hive2://localhost:10000", "-n", "root")
+    }
+    "web" {
+        Invoke-Compose @("--profile", "tools", "up", "-d", "web")
+        Write-Host "Agent dashboard: http://localhost:5000"
+    }
+    "agent" {
+        Invoke-Compose @("exec", "-T", "python", "python", "-m", "career_insight.agent.cli")
     }
 }

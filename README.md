@@ -18,3 +18,65 @@
 - 数据可视化工具：echarts
 - 大数据平台：Hadoop3.3.6 hive 4.0.1 Spark3.5.1,
 # 项目目标
+
+# 项目启动与关闭
+
+启动完整大数据环境：
+
+```powershell
+.\scripts\bigdata-docker.cmd up-all
+```
+
+查看容器状态：
+
+```powershell
+.\scripts\bigdata-docker.cmd status
+```
+
+关闭项目：
+
+```powershell
+.\scripts\bigdata-docker.cmd down
+```
+
+# AI 流程智能体
+
+`agent` 分支加入了“流程智能体”：
+
+```text
+公开招聘页面慢速采集 -> raw_jobs -> agent_clean_jobs -> 分析表 -> HDFS -> AI 报告 -> Web 看板
+```
+
+启动网页看板：
+
+```powershell
+.\scripts\bigdata-docker.cmd web
+```
+
+浏览器打开：
+
+```text
+http://localhost:5000
+```
+
+手动在容器里跑一次智能体：
+
+```powershell
+.\scripts\bigdata-docker.cmd agent
+```
+
+云端模型配置在 `.env`：
+
+```env
+LLM_API_KEY=
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
+```
+
+`LLM_API_KEY` 留空时，系统不会报错，会使用本地规则生成一份兜底报告。要采集真实公开页面，把页面 URL 填到：
+
+```env
+CRAWL_TARGET_URLS=
+```
+
+多个 URL 用英文逗号分隔。采集器只做公开页面慢速抓取，不处理登录、验证码或绕过反爬。

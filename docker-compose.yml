@@ -213,12 +213,76 @@ services:
     profiles: ["tools"]
     environment:
       TZ: Asia/Shanghai
+      PYTHONPATH: /workspace/src
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
+      MYSQL_USER: zhitu
+      MYSQL_PASSWORD: zhitu123456
+      MYSQL_DATABASE: zhitu
       REDIS_HOST: redis
       REDIS_PORT: 6379
       HADOOP_FS: hdfs://namenode:9000
+      WEBHDFS_URL: http://namenode:9870/webhdfs/v1
       SPARK_MASTER: spark://spark-master:7077
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
+      CRAWL_TARGET_URLS: ${CRAWL_TARGET_URLS:-}
+      CRAWL_KEYWORDS: ${CRAWL_KEYWORDS:-大数据,数据分析,Spark,Hive}
+      CRAWL_MAX_PAGES: ${CRAWL_MAX_PAGES:-2}
+      CRAWL_DELAY_SECONDS: ${CRAWL_DELAY_SECONDS:-3}
+      AGENT_SCHEDULE_ENABLED: ${AGENT_SCHEDULE_ENABLED:-false}
+      AGENT_DAILY_TIME: ${AGENT_DAILY_TIME:-09:00}
+    volumes:
+      - ./:/workspace
+      - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}:/data
+    working_dir: /workspace
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: zhitu/python-bigdata:3.12
+    build:
+      context: ./docker/build-context
+      dockerfile: dockerfiles/python.Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    container_name: zhitu-agent-web
+    hostname: agent-web
+    command: ["python", "-m", "career_insight.visualization.app"]
+    profiles: ["tools"]
+    environment:
+      TZ: Asia/Shanghai
+      PYTHONPATH: /workspace/src
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: zhitu
+      MYSQL_PASSWORD: zhitu123456
+      MYSQL_DATABASE: zhitu
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      HADOOP_FS: hdfs://namenode:9000
+      WEBHDFS_URL: http://namenode:9870/webhdfs/v1
+      SPARK_MASTER: spark://spark-master:7077
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
+      CRAWL_TARGET_URLS: ${CRAWL_TARGET_URLS:-}
+      CRAWL_KEYWORDS: ${CRAWL_KEYWORDS:-大数据,数据分析,Spark,Hive}
+      CRAWL_MAX_PAGES: ${CRAWL_MAX_PAGES:-2}
+      CRAWL_DELAY_SECONDS: ${CRAWL_DELAY_SECONDS:-3}
+      AGENT_SCHEDULE_ENABLED: ${AGENT_SCHEDULE_ENABLED:-false}
+      AGENT_DAILY_TIME: ${AGENT_DAILY_TIME:-09:00}
+    ports:
+      - "5000:5000"
     volumes:
       - ./:/workspace
       - ${BIGDATA_DOCKER_DATA:-D:/docker/bigdata/data}:/data
