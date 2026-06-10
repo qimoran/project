@@ -88,7 +88,7 @@ class WorkflowAgent:
             report = generate_ai_report(metrics)
             title = "招聘数据智能分析报告"
             if report.used_fallback:
-                warnings.append("LLM 未配置或调用失败，已使用本地报告兜底")
+                warnings.append(report.fallback_reason or "LLM 报告使用本地规则兜底")
             self.store.save_report(
                 run_id,
                 title=title,
@@ -99,7 +99,11 @@ class WorkflowAgent:
             self.store.finish_step(
                 step_id,
                 "succeeded" if not report.used_fallback else "warning",
-                f"报告已生成，模型：{report.model}",
+                (
+                    f"报告已生成，模型：{report.model}"
+                    if not report.used_fallback
+                    else f"报告已使用本地规则兜底；{report.fallback_reason}"
+                ),
             )
 
             message = "流程智能体运行完成"

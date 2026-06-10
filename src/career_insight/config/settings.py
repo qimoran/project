@@ -53,8 +53,9 @@ class Settings:
     spark_master: str = os.getenv("SPARK_MASTER", "spark://spark-master:7077")
 
     llm_api_key: str = os.getenv("LLM_API_KEY", "")
-    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    llm_model: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://anyrouter.top/v1")
+    llm_model: str = os.getenv("LLM_MODEL", "gpt-5.5")
+    llm_wire_api: str = os.getenv("LLM_WIRE_API", "responses")
     llm_timeout_seconds: int = _get_int("LLM_TIMEOUT_SECONDS", 60)
 
     crawl_target_urls: tuple[str, ...] = tuple(_split_csv(os.getenv("CRAWL_TARGET_URLS")))

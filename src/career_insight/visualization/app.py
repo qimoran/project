@@ -68,6 +68,7 @@ def create_app() -> Flask:
                         "llm_configured": settings.llm_configured,
                         "llm_base_url": settings.llm_base_url,
                         "llm_model": settings.llm_model,
+                        "llm_wire_api": settings.llm_wire_api,
                         "crawl_target_urls": as_text_list(settings.crawl_target_urls),
                     },
                     "schedule": schedule,

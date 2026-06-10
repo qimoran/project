@@ -225,8 +225,9 @@ services:
       WEBHDFS_URL: http://namenode:9870/webhdfs/v1
       SPARK_MASTER: spark://spark-master:7077
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://anyrouter.top/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-5.5}
+      LLM_WIRE_API: ${LLM_WIRE_API:-responses}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
       CRAWL_TARGET_URLS: ${CRAWL_TARGET_URLS:-}
       CRAWL_KEYWORDS: ${CRAWL_KEYWORDS:-大数据,数据分析,Spark,Hive}
@@ -272,8 +273,9 @@ services:
       WEBHDFS_URL: http://namenode:9870/webhdfs/v1
       SPARK_MASTER: spark://spark-master:7077
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://anyrouter.top/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-5.5}
+      LLM_WIRE_API: ${LLM_WIRE_API:-responses}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
       CRAWL_TARGET_URLS: ${CRAWL_TARGET_URLS:-}
       CRAWL_KEYWORDS: ${CRAWL_KEYWORDS:-大数据,数据分析,Spark,Hive}

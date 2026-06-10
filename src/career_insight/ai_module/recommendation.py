@@ -81,17 +81,21 @@ def generate_ai_report(metrics: dict[str, Any], client: CompatibleLLMClient | No
     try:
         response = llm.chat(build_report_prompt(metrics))
         if response.used_fallback or not response.content.strip():
+            reason = response.fallback_reason or "未配置 LLM_API_KEY，已使用本地规则生成报告。"
             return LLMResponse(
-                content=fallback_report(metrics, "未配置 LLM_API_KEY，已使用本地规则生成报告。"),
+                content=fallback_report(metrics, reason),
                 model=response.model,
                 used_fallback=True,
+                fallback_reason=reason,
             )
         return response
     except Exception as exc:
+        reason = f"云端模型调用失败：{exc}"
         return LLMResponse(
-            content=fallback_report(metrics, f"云端模型调用失败：{exc}"),
+            content=fallback_report(metrics, reason),
             model=llm.settings.llm_model,
             used_fallback=True,
+            fallback_reason=reason,
         )
 
 

@@ -69,8 +69,9 @@ http://localhost:5000
 
 ```env
 LLM_API_KEY=
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=https://anyrouter.top/v1
+LLM_MODEL=gpt-5.5
+LLM_WIRE_API=responses
 ```
 
 `LLM_API_KEY` 留空时，系统不会报错，会使用本地规则生成一份兜底报告。要采集真实公开页面，把页面 URL 填到：
